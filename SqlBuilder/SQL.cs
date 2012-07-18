@@ -27,41 +27,63 @@ namespace SqlStringBuilder
 			return sb;
 		}
 
-		public static StringBuilder INSERT(string table, params object[] objects)
+		public static StringBuilder INSERT<T>(string tableNameOverride = null)
 		{
+			return INSERT(typeof(T), tableNameOverride);
+		}
+
+		public static StringBuilder INSERT(object typeOfMe, string tableNameOverride = null)
+		{
+			if (typeOfMe == null) throw new ArgumentNullException("typeOfMe");
+			return INSERT(typeOfMe.GetType(), tableNameOverride);
+		}
+
+		public static StringBuilder INSERT(Type type, string tableNameOverride = null)
+		{
+			var tableName = tableNameOverride ?? type.Name;
+
 			var sb = new StringBuilder("INSERT INTO ");
-			sb.Append(table);
+			sb.Append(tableName);
 			sb.Append(@"
 ( ");
-			sb.AppendItems(x => sb.AppendColumnList(null, x), objects);
+			//sb.AppendItems(x => sb.AppendColumnList(null, type), type);
+			sb.AppendColumnList(null, type);
 
 			sb.Append(" )");
 			sb.Append(@" VALUES
 ");
 			sb.Append("( ");
 
-			sb.AppendItems(x=> sb.PARAMS(x), objects);
+			//sb.AppendItems(x=> sb.PARAMS(x), type);
+			sb.PARAMS(type);
 
-			sb.Append(" )");
+			sb.Append(" )\n");
 
 			return sb;
 		}
 
-		public static StringBuilder UPDATE(string table, params object[] objects)
+		public static StringBuilder UPDATE(object typeOfMe, string tableNameOverride = null)
 		{
+			return UPDATE(typeOfMe.GetType(), tableNameOverride);
+		}
+
+		public static StringBuilder UPDATE(Type type, string tableNameOverride = null)
+		{
+			var tableName = tableNameOverride ?? type.Name;
 			var sb = new StringBuilder("UPDATE ");
-			sb.Append(table);
+			sb.Append(tableName);
 			sb.Append(@" SET
 ");
 
-			sb.AppendItems(x=> sb.EQ_PARAMS(x), objects);
+			///sb.AppendItems(x=> sb.EQ_PARAMS(x), objects);
+			sb.EQ_PARAMS(type);
+			sb.A("\n");
 			return sb;
 		}
 
-		public static StringBuilder UPDATE<T>(T parametes, string tableNameOverride = null)
+		public static StringBuilder UPDATE<T>(string tableNameOverride = null)
 		{
-			var tableName = tableNameOverride ?? typeof (T).Name;
-			return UPDATE(tableName, parametes);
+			return UPDATE(typeof(T), tableNameOverride);
 		}
 
 		public static StringBuilder DELETE(string table)
@@ -102,8 +124,16 @@ WHERE ");
 
 		public static StringBuilder @PARAMS(this StringBuilder sb, object item)
 		{
-			var type = item.GetType();
+			return sb.PARAMS(item.GetType());
+		}
 
+		public static StringBuilder @PARAMS<T>(this StringBuilder sb)
+		{
+			return sb.PARAMS(typeof (T));
+		}
+
+		public static StringBuilder @PARAMS(this StringBuilder sb, Type type)
+		{
 			ForEachFieldAndProperty(type,
 			                        f => { sb.PARAM(f.Name); sb.Append(", "); },
 			                        p => { sb.PARAM(p.Name); sb.Append(", "); }
@@ -120,10 +150,8 @@ WHERE ");
 			return sb;
 		}
 
-		public static StringBuilder EQ_PARAMS(this StringBuilder sb, object item)
+		public static StringBuilder EQ_PARAMS(this StringBuilder sb, Type type)
 		{
-			var type = item.GetType();
-
 			ForEachFieldAndProperty(type,
 			                        f => sb.EQ_PARAM(f.Name).A(", "),
 			                        p => sb.EQ_PARAM(p.Name).A(", ")
@@ -145,6 +173,23 @@ SELECT @@IDENTITY");
 			sb.Append(@"
 SELECT SCOPE_IDENTITY()");
 			return sb;
+		}
+
+		public static StringBuilder SELECT_LAST_INSERTED_ID(this StringBuilder sb, string database)
+		{
+			if (String.Compare("SqlServer", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.SELECT_SCOPE_IDENTITY();
+
+			if (String.Compare("Sqlite", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.A(";").SELECT("last_insert_rowid()");
+
+			if (String.Compare("PostgreSQL", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.SELECT("LASTVAL()");
+
+			if (String.Compare("MySQL", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.A(";").SELECT("LAST_INSERT_ID()");
+
+			throw new ArgumentException("Unknown database. We only know about \"SqlServer\", \"Sqlite\". Suggest you create your own extension wrapper method around this one");
 		}
 
 		public static StringBuilder FROM(this StringBuilder sb, string literal)
@@ -183,12 +228,8 @@ FROM ");
 			return sb;
 		}
 
-		internal static void AppendColumnList(this StringBuilder sb, string prefix, object item)
+		internal static void AppendColumnList(this StringBuilder sb, string prefix, Type type)
 		{
-			if (item == null) return;
-
-			var type = item.GetType();
-
 			ForEachFieldAndProperty(type,
 			                        f => sb.COLUMN(f.Name, prefix).A(", "),
 			                        p => sb.COLUMN(p.Name, prefix).A(", "));
@@ -218,27 +259,27 @@ FROM ");
 			sb.Remove(sb.Length - characterCount, characterCount);
 		}
 
-		public static void AppendItems(this StringBuilder sb, Action<object> objectAppender, params object[] items)
-		{
-			bool first = true;
+		//public static void AppendItems(this StringBuilder sb, Action<object> objectAppender, params object[] items)
+		//{
+		//    bool first = true;
 
-			foreach (var item in items)
-			{
-				if (!first)
-					sb.Append(", ");
+		//    foreach (var item in items)
+		//    {
+		//        if (!first)
+		//            sb.Append(", ");
 
-				if (item is string)
-				{
-					sb.Append(item);
-				}
-				else
-				{
-					objectAppender(item);
-				}
+		//        if (item is string)
+		//        {
+		//            sb.Append(item);
+		//        }
+		//        else
+		//        {
+		//            objectAppender(item);
+		//        }
 
-				first = false;
-			}
-		}
+		//        first = false;
+		//    }
+		//}
 
 		private static void ForEachFieldAndProperty(Type type, Action<FieldInfo> fieldAction, Action<MemberInfo> propertyAction)
 		{
