@@ -27,6 +27,13 @@ namespace SqlStringBuilder
 			return sb;
 		}
 
+		public static StringBuilder INSERT(string tableName)
+		{
+			var sb = new StringBuilder("INSERT INTO ");
+			sb.Append(tableName);
+			return sb;
+		}
+
 		public static StringBuilder INSERT<T>(string tableNameOverride = null)
 		{
 			return INSERT(typeof(T), tableNameOverride);
@@ -59,6 +66,14 @@ namespace SqlStringBuilder
 
 			sb.Append(" )\n");
 
+			return sb;
+		}
+
+		public static StringBuilder UPDATE(string tableName)
+		{
+			var sb = new StringBuilder("UPDATE ");
+			sb.Append(tableName);
+			sb.Append("SET ");
 			return sb;
 		}
 
@@ -96,6 +111,12 @@ namespace SqlStringBuilder
 		public static StringBuilder A(this StringBuilder sb, string literal)
 		{
 			sb.Append(literal);
+			return sb;
+		}
+
+		public static StringBuilder AL(this StringBuilder sb, string literal)
+		{
+			sb.AppendLine(literal);
 			return sb;
 		}
 
@@ -188,6 +209,23 @@ SELECT SCOPE_IDENTITY()");
 
 			if (String.Compare("MySQL", database, StringComparison.InvariantCultureIgnoreCase) == 0)
 				return sb.A(";").SELECT("LAST_INSERT_ID()");
+
+			throw new ArgumentException("Unknown database. We only know about \"SqlServer\", \"Sqlite\". Suggest you create your own extension wrapper method around this one");
+		}
+
+		public static StringBuilder THEN(this StringBuilder sb, string database)
+		{
+			if (String.Compare("SqlServer", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.AL("GO");
+
+			if (String.Compare("Sqlite", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.AL(";");
+
+			if (String.Compare("PostgreSQL", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.AL(";");
+
+			if (String.Compare("MySQL", database, StringComparison.InvariantCultureIgnoreCase) == 0)
+				return sb.AL(";");
 
 			throw new ArgumentException("Unknown database. We only know about \"SqlServer\", \"Sqlite\". Suggest you create your own extension wrapper method around this one");
 		}
